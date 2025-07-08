@@ -534,7 +534,7 @@ mod test {
         ];
 
         for i in VALID_BRIGHTNESS_VALUES {
-            assert_eq!(u8::from(Brightness::from(i.0)), i.1);
+            assert_eq!(u8::from(i.0), i.1);
         }
     }
 }
