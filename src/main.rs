@@ -1,7 +1,5 @@
 #![warn(clippy::all, clippy::pedantic)]
 
-use std::{fs, path::PathBuf};
-
 use anyhow::{Context, Result};
 use badgemagic::{
     ble::Device as BleDevice,
@@ -10,6 +8,8 @@ use badgemagic::{
 };
 use base64::Engine;
 use clap::{Parser, ValueEnum};
+#[cfg(not(any(feature = "u8g2-fonts")))]
+use embedded_graphics::mono_font::{iso_8859_1::FONT_6X9, MonoTextStyle};
 use embedded_graphics::{
     geometry::Point,
     image::{Image, ImageRawLE},
@@ -17,10 +17,11 @@ use embedded_graphics::{
     text::Text,
     Drawable, Pixel,
 };
+use image::{
+    codecs::gif::GifDecoder, imageops::FilterType, AnimationDecoder, ImageReader, Pixel as iPixel,
+};
 use serde::Deserialize;
-
-#[cfg(not(any(feature = "u8g2-fonts")))]
-use embedded_graphics::mono_font::{iso_8859_1::FONT_6X9, MonoTextStyle};
+use std::{fs, fs::File, io::BufReader, path::PathBuf};
 #[cfg(feature = "u8g2-fonts")]
 use u8g2_fonts::{fonts::u8g2_font_lucasfont_alternate_tf, U8g2TextStyle};
 
@@ -99,8 +100,8 @@ enum Content {
     Bitstring { bitstring: String },
     BitmapBase64 { width: u32, bitmap_base64: String },
     BitmapFile { width: u32, bitmap_file: PathBuf },
-    // TODO: implement png
-    // PngFile { png_file: PathBuf },
+    ImageFile { img_file: PathBuf },
+    GifFile { gif_file: PathBuf },
 }
 
 fn main() -> Result<()> {
@@ -208,12 +209,8 @@ fn generate_payload(args: &mut Args) -> Result<PayloadBuffer> {
                                 // off
                             }
                             'X' => {
-                                Pixel(
-                                    Point::new(x.try_into().unwrap(), y.try_into().unwrap()),
-                                    BinaryColor::On,
-                                )
-                                .draw(&mut buffer)
-                                .unwrap();
+                                Pixel(Point::new(x.try_into()?, y.try_into()?), BinaryColor::On)
+                                    .draw(&mut buffer)?;
                             }
                             _ => anyhow::bail!("invalid bit value for bit ({x}, {y}): {c:?}"),
                         }
@@ -240,6 +237,53 @@ fn generate_payload(args: &mut Args) -> Result<PayloadBuffer> {
                 let image_raw = ImageRawLE::<BinaryColor>::new(&data, width);
                 let image = Image::new(&image_raw, Point::zero());
                 payload.add_message_drawable(style, &image);
+            }
+            Content::ImageFile { img_file } => {
+                let img_reader = ImageReader::open(img_file)?;
+                let img = img_reader
+                    .decode()?
+                    .resize(u32::MAX, 11, FilterType::Nearest)
+                    .into_luma8();
+                let (width, height) = img.dimensions();
+                let mut buffer = payload.add_message(style, (width as usize + 7) / 8);
+                for y in 0..height {
+                    for x in 0..width {
+                        if img.get_pixel(x, y).0 > [31] {
+                            Pixel(Point::new(x.try_into()?, y.try_into()?), BinaryColor::On)
+                                .draw(&mut buffer)?;
+                        }
+                    }
+                }
+            }
+            Content::GifFile { gif_file } => {
+                let file_in = BufReader::new(File::open(gif_file)?);
+                let frames = GifDecoder::new(file_in)?
+                    .into_frames()
+                    .collect_frames()
+                    .expect("error decoding gif");
+
+                let frame_count = frames.len();
+                let (width, height) = frames.first().unwrap().buffer().dimensions();
+                if height != 11 || width != 44 {
+                    anyhow::bail!("Expected 44x11 pixel gif file");
+                }
+
+                let mut buffer = payload.add_message(style, (48 * frame_count + 7) / 8);
+
+                for (i, frame) in frames.iter().enumerate() {
+                    let buf = frame.buffer();
+                    for y in 0..11 {
+                        for x in 0..44 {
+                            if buf.get_pixel(x, y).to_luma().0 > [31] {
+                                Pixel(
+                                    Point::new((x as usize + i * 48).try_into()?, y.try_into()?),
+                                    BinaryColor::On,
+                                )
+                                .draw(&mut buffer)?;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
