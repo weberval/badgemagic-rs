@@ -12,16 +12,13 @@ use embedded_graphics::{
     mono_font::{iso_8859_1::FONT_6X9, MonoTextStyle},
     pixelcolor::BinaryColor,
     text::Text,
-    Drawable,
-    Pixel,
+    Drawable, Pixel,
+};
+use image::{
+    codecs::gif::GifDecoder, imageops::FilterType, AnimationDecoder, ImageReader,
+    Pixel as ImagePixel,
 };
 use serde::Deserialize;
-use image::{
-    AnimationDecoder,
-    codecs::gif::GifDecoder,
-    imageops::FilterType,
-    ImageReader, Pixel as ImagePixel,
-};
 
 use badgemagic::{
     ble::Device as BleDevice,
