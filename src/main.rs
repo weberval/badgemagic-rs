@@ -1,7 +1,7 @@
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::unnecessary_debug_formatting)]
 
-use std::{fs, fs::File, io::BufReader, path::PathBuf};
+use std::{fs, io::BufReader, path::PathBuf};
 
 use anyhow::{Context, Result};
 use base64::Engine;
@@ -12,11 +12,15 @@ use embedded_graphics::{
     mono_font::{iso_8859_1::FONT_6X9, MonoTextStyle},
     pixelcolor::BinaryColor,
     text::Text,
-    Drawable, Pixel,
+    Drawable,
+    Pixel,
 };
 use serde::Deserialize;
 use image::{
-    codecs::gif::GifDecoder, imageops::FilterType, AnimationDecoder, ImageReader, Pixel as iPixel,
+    AnimationDecoder,
+    codecs::gif::GifDecoder,
+    imageops::FilterType,
+    ImageReader, Pixel as ImagePixel,
 };
 
 use badgemagic::{
@@ -246,7 +250,7 @@ fn generate_payload(args: &mut Args) -> Result<PayloadBuffer> {
                 }
             }
             Content::GifFile { gif_file } => {
-                let file_in = BufReader::new(File::open(gif_file)?);
+                let file_in = BufReader::new(fs::File::open(gif_file)?);
                 let frames = GifDecoder::new(file_in)?
                     .into_frames()
                     .collect_frames()
