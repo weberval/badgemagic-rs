@@ -245,7 +245,7 @@ fn write_payload(
             .enable_all()
             .build()?
             .block_on(async {
-                BleDevice::single(device_name.map(|x| x.as_str()))
+                BleDevice::single(device_name.map(String::as_str))
                     .await?
                     .write(payload)
                     .await
