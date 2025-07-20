@@ -44,6 +44,10 @@ struct Args {
     #[clap(long)]
     transport: TransportProtocol,
 
+    /// Device name for BLE device discovery
+    #[clap(long)]
+    device_name: Option<String>,
+
     /// List all devices visible to a transport and exit
     #[clap(long)]
     list_devices: bool,
@@ -105,7 +109,7 @@ fn main() -> Result<()> {
 
     let payload = gnerate_payload(&mut args)?;
 
-    write_payload(&args.transport, payload)
+    write_payload(&args.transport, args.device_name, payload)
 }
 
 fn list_devices(transport: &TransportProtocol) -> Result<()> {
@@ -232,6 +236,7 @@ fn gnerate_payload(args: &mut Args) -> Result<PayloadBuffer> {
 
 fn write_payload(
     transport: &TransportProtocol,
+    device_name: Option<String>,
     payload: PayloadBuffer,
 ) -> Result<(), anyhow::Error> {
     match transport {
@@ -239,6 +244,6 @@ fn write_payload(
         TransportProtocol::Ble => tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?
-            .block_on(async { BleDevice::single().await?.write(payload).await }),
+            .block_on(async { BleDevice::single(device_name).await?.write(payload).await }),
     }
 }
